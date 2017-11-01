@@ -1,6 +1,8 @@
 #include <array>
 #include <boost/fusion/adapted/array.hpp>
 #include <boost/fusion/adapted/std_array.hpp>
+#include <boost/fusion/adapted/std_tuple.hpp>
+#include <boost/fusion/adapted/std_pair.hpp>
 #include <boost/spirit/home/x3.hpp>
 #include <boost/spirit/include/support_istream_iterator.hpp>
 
@@ -42,7 +44,7 @@ auto fullboxlist = x3::lit("array") > '(' > bracketize(innerboxlist ) > ',' > "d
 
 auto boxes = bracketize(*(fullboxlist));
 
-auto scorelist = x3::lit("array") > '(' > bracketize(*(x3::double_)) > ')';
+auto scorelist = x3::lit("array") > '(' > bracketize(x3::double_ % ',') > ')';
 auto scores = bracketize(*(scorelist));
 
 template<class RuleType, class AttrType> void parseToEndWithError(istream& file, const RuleType& rule, AttrType& target)
@@ -68,18 +70,10 @@ int main(int argc, char** argv)
 	}
 	ifstream file(argv[1]);
 	vector<vector<box>> ourBoxes;
-	parseToEndWithError(file, boxes, ourBoxes);
-	for (const auto& bl : ourBoxes)
-	{
-		for (const auto& b : bl)
-		{
-			for (int v : b)
-			{
-				cout << v << " ";
-			}
-			cout << "\n";
-		}
-	}
+	vector<vector<double>> scoreVals;
+	auto output = std::forward_as_tuple(ourBoxes, scoreVals);
+	parseToEndWithError(file, boxes > scores, output);
+	cout << "Read " << ourBoxes.size() << " box lists and " << scoreVals.size() << " score lists." << "\n";
 }
 
 
