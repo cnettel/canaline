@@ -62,6 +62,13 @@ template<class RuleType, class AttrType> void parseToEndWithError(istream& file,
 	}
 }
 
+// Coming in C++ 17
+template <class T>
+constexpr std::add_const_t<T>& as_const(const T& t) noexcept
+{
+	return t;
+}
+
 int main(int argc, char** argv)
 {
 	if (argc < 1)
@@ -71,8 +78,7 @@ int main(int argc, char** argv)
 	ifstream file(argv[1]);
 	vector<vector<box>> ourBoxes;
 	vector<vector<double>> scoreVals;
-	auto output = std::forward_as_tuple(ourBoxes, scoreVals);
-	parseToEndWithError(file, boxes > scores, output);
+	parseToEndWithError(file, boxes > scores, as_const(std::forward_as_tuple(ourBoxes, scoreVals)));
 	cout << "Read " << ourBoxes.size() << " box lists and " << scoreVals.size() << " score lists." << "\n";
 }
 
