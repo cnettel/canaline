@@ -1,5 +1,6 @@
 #include <array>
 #include <boost/spirit/home/x3.hpp>
+#include <boost/spirit/include/support_istream_iterator.hpp>
 #include <iostream>
 #include <fstream>
 
@@ -9,7 +10,7 @@ using namespace std;
 using box = std::array<int, 4>;
 
 
-auto constexpr bracketize(auto what)
+template<class T> auto constexpr bracketize(T what)
 {
 	return '[' > what > ']';
 }
