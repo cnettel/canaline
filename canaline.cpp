@@ -9,6 +9,8 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <map>
+#include <string>
 
 using namespace boost::spirit;
 using namespace std;
@@ -38,12 +40,15 @@ template<class T> auto constexpr bracketize(T what)
 	return '[' > what > ']';
 }
 
+// Vector of four ints
 auto boxrule = bracketize(x3::int_ > ',' > x3::int_ > ',' > x3::int_ > ',' > x3::int_);
+// Comma-separated list of such vectors
 auto innerboxlist = (boxrule % ',');
 auto fullboxlist = x3::lit("array") > '(' > bracketize(innerboxlist ) > ',' > "dtype" > '=' > "int64" > ')';
-
+// The whole first section of the data file
 auto boxes = bracketize(*(fullboxlist));
 
+// Array of lists of doubles
 auto scorelist = x3::lit("array") > '(' > bracketize(x3::double_ % ',') > ')';
 auto scores = bracketize(*(scorelist));
 
@@ -62,6 +67,33 @@ template<class RuleType, class AttrType> void parseToEndWithError(istream& file,
 	}
 }
 
+struct wordmapper
+{
+private:
+	map<string, int> mapping;
+	map<int, string> inversemapping;
+public:
+	int getMapping(string word)
+	{
+		auto i = mapping.find(word);
+		if (i != mapping.end())
+		{
+			return i->second;
+		}
+
+		int index = mapping.size();
+		mapping[word] = index;
+		inversemapping[index] = word;
+
+		return index;
+	}
+
+	string getWord(int mapping)
+	{
+		return inversemapping[mapping];
+	}
+} wordmap;
+
 // Coming in C++ 17
 template <class T>
 constexpr std::add_const_t<T>& as_const(const T& t) noexcept
@@ -69,9 +101,12 @@ constexpr std::add_const_t<T>& as_const(const T& t) noexcept
 	return t;
 }
 
+auto word_ = x3::lexeme[+(x3::char_ - x3::space)];
+auto linefile = *(*word_ > eol);
+
 int main(int argc, char** argv)
 {
-	if (argc < 1)
+	if (argc < 2)
 	{
 		return -1;
 	}
@@ -80,6 +115,8 @@ int main(int argc, char** argv)
 	vector<vector<double>> scoreVals;
 	parseToEndWithError(file, boxes > scores, as_const(std::forward_as_tuple(ourBoxes, scoreVals)));
 	cout << "Read " << ourBoxes.size() << " box lists and " << scoreVals.size() << " score lists." << "\n";
+
+	file = ifstream(argv[2]);
+	parseToEndWithError(file, boxes > scores, as_const(std::forward_as_tuple(ourBoxes, scoreVals)));
+	vector<vector<int> > rows;
 }
-
-
