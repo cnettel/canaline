@@ -1,13 +1,34 @@
 #include <array>
+#include <boost/fusion/adapted/array.hpp>
+#include <boost/fusion/adapted/std_array.hpp>
 #include <boost/spirit/home/x3.hpp>
 #include <boost/spirit/include/support_istream_iterator.hpp>
+
 #include <iostream>
 #include <fstream>
+#include <vector>
 
 using namespace boost::spirit;
 using namespace std;
 
 using box = std::array<int, 4>;
+
+// According to https://wandbox.org/permlink/poeusnilIOwmiEBo
+namespace boost {
+	namespace spirit {
+		namespace x3 {
+			namespace traits {
+				// It can't be specialized because X3 implements is_container as a template aliases,
+				// thus we need QUITE TERRIBLE DIRTY hack for fixed length container.
+				//template <> struct is_container<Vertex const> : mpl::false_ { };
+				//template <> struct is_container<Vertex> : mpl::false_ { };
+				namespace detail {
+					template <> struct has_type_value_type<box> : mpl::false_ { };
+				}
+			}
+		}
+	}
+}
 
 
 template<class T> auto constexpr bracketize(T what)
@@ -16,7 +37,7 @@ template<class T> auto constexpr bracketize(T what)
 }
 
 auto boxrule = bracketize(x3::int_ > ',' > x3::int_ > ',' > x3::int_ > ',' > x3::int_);
-auto innerboxlist = *(boxrule > ',') > boxrule;
+auto innerboxlist = (boxrule % ',');
 auto fullboxlist = x3::lit("array") > '(' > bracketize(innerboxlist ) > ',' > "dtype" > '=' > "int64" > ')';
 
 auto boxes = bracketize(*(fullboxlist));
@@ -46,6 +67,19 @@ int main(int argc, char** argv)
 		return -1;
 	}
 	ifstream file(argv[1]);
+	vector<vector<box>> ourBoxes;
+	parseToEndWithError(file, boxes, ourBoxes);
+	for (const auto& bl : ourBoxes)
+	{
+		for (const auto& b : bl)
+		{
+			for (int v : b)
+			{
+				cout << v << " ";
+			}
+			cout << "\n";
+		}
+	}
 }
 
 
