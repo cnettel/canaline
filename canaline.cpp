@@ -102,7 +102,10 @@ constexpr std::add_const_t<T>& as_const(const T& t) noexcept
 }
 
 auto word_ = x3::lexeme[+(x3::char_ - x3::space)];
-auto linefile = *(*word_ > eol);
+auto on_word = [&](auto& ctx) {
+	return wordmap.getMapping(x3::_attr(ctx));
+};
+auto linefile = *(*(word_[on_word]) > x3::eol);
 
 int main(int argc, char** argv)
 {
@@ -112,11 +115,12 @@ int main(int argc, char** argv)
 	}
 	ifstream file(argv[1]);
 	vector<vector<box>> ourBoxes;
-	vector<vector<double>> scoreVals;
+	vector<vector<double>> scoreVals;	
+
 	parseToEndWithError(file, boxes > scores, as_const(std::forward_as_tuple(ourBoxes, scoreVals)));
 	cout << "Read " << ourBoxes.size() << " box lists and " << scoreVals.size() << " score lists." << "\n";
 
 	file = ifstream(argv[2]);
-	parseToEndWithError(file, boxes > scores, as_const(std::forward_as_tuple(ourBoxes, scoreVals)));
-	vector<vector<int> > rows;
+	vector<vector<int>> rows;
+	parseToEndWithError(file, linefile, rows);
 }
