@@ -30,8 +30,17 @@
 *.exe
 *.out
 *.app
+
+# Visual Studio stuff
 /.vs/canaline/v15/ipch/AutoPCH/5cc0a194968b5d8f/CANALINE.ipch
 /.vs/canaline/v15/Browse.VC.db
 /.vs/canaline/v15/Browse.VC.opendb
 /.vs/ProjectSettings.json
 /.vs
+/Debug
+/packages/boost.1.65.1.0
+/packages.config
+/canaline.vcxproj.user
+/canaline.vcxproj.filters
+/canaline.vcxproj
+/canaline.sln
