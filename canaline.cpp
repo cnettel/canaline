@@ -103,6 +103,7 @@ constexpr std::add_const_t<T>& as_const(const T& t) noexcept
 
 auto word_ = x3::lexeme[+(x3::char_ - x3::space)];
 auto linefile = *word_ % x3::eol;
+using stateVec = array<double, 1000>;
 
 struct hmmtype
 {
@@ -127,30 +128,29 @@ struct hmmtype
 
 	void emit(stateVec& state, int pos)
 	{
-		int i = 0;
-		for (auto& val : state)
+		for (int i = 0; i < scoreVals[pos].size(); i++)
 		{
-			val *= max(1e-9, scoreVals[pos][i++]);
+			state[i] *= max(1e-9, scoreVals[pos][i]);
 		}
 	}
 
 	static double transProb(const box& a, const box& b, bool linebreak)
 	{
 		bool ok = false;
-		int height = max(a[4] - a[2], b[4] - b[2]);
+		int height = max(a[3] - a[3], b[3] - b[1]);
 		if (linebreak)
 		{
-			if (b[2] > a[2]) ok = true;
+			if (b[1] > a[1]) ok = true;
 		}
 		else
 		{
-			if (b[1] > a[1] && b[2] > a[2] - height && b[2] < a[2] + height) ok = true;
+			if (b[0] > a[0] && b[1] > a[1] - height && b[1] < a[1] + height) ok = true;
 		}
 
 		return ok ? 1 : 1e-5;
 	}
 
-	template<int dir> void transition(const stateVec& fState, stateVec& toState, int fromPos, int toPos)
+	template<int dir> void transition(const stateVec& fState, stateVec& tState, int fromPos, int toPos)
 	{
 		static_assert(dir == -1 || dir == 1);
 
@@ -164,7 +164,7 @@ struct hmmtype
 			for (int j = 0; j < scoreVals[toPos].size(); j++)
 			{
 				box* fromBox = &ourBoxes[fromPos][i];
-				box* toBox = &ourBoxes[toPos][i];
+				box* toBox = &ourBoxes[toPos][j];
 				int fIndex = fromPos;
 
 				if (dir == -1)
@@ -173,7 +173,7 @@ struct hmmtype
 					swap(fromBox, toBox);
 				}
 
-				tState[j] += fState[i] * transProb(fromBox, toBox, lineEnd[fIndex]);
+				tState[j] += fState[i] * transProb(*fromBox, *toBox, lineEnd[fIndex]);
 			}
 		}
 	}
@@ -185,6 +185,9 @@ struct hmmtype
 		{
 			sum += state[i];
 		}
+		if (isnan(sum)) cerr << "Normalization error at " << pos << "\n";
+		if (sum == 0) cerr << "Zero at " << pos << "\n";
+		cout << "Sum at " << pos << ":" << sum << "\n";
 
 		if (sum < 1e-10)
 		{
@@ -205,32 +208,93 @@ struct hmmtype
 
 		for (int i = 0; i < scoreVals.size(); i++)
 		{
-			emit(fwbw[0][i]);
+			emit(fwbw[0][i], i);
 			if (i != scoreVals.size() - 1)
 			{
 				transition<1>(fwbw[0][i], fwbw[0][i + 1], i, i + 1);
 			}
 
-			normalize(fwbw[0][i + 1]);
+			normalize(fwbw[0][i + 1], i);
 		}
 
 		// BW
 		for (int i = 0; i < scoreVals[scoreVals.size() - 1].size(); i++)
 		{
-			fwbw[1][0][i] = 1;
+			fwbw[1][scoreVals.size() - 1][i] = 1;
 		}
 
 		for (int i = scoreVals.size() - 1; i != 0; i--)
 		{
-			transition<-1>(fwbw[1][i], fwbw[1][i - 1], i, i - 1);
-			emit(fwbw[1][i - 1]);
+			stateVec copy = fwbw[1][i];
+			emit(copy, i);
+			transition<-1>(copy, fwbw[1][i - 1], i, i - 1);			
 
-			normalize(fwbw[1][i - 1]);
+			normalize(fwbw[1][i - 1], i - 1);
 		}
+	}
+
+	void fakeFB()
+	{
+		// FW
+		for (int j = 0; j < scoreVals.size(); j++)
+		{
+			for (int i = 0; i < scoreVals[j].size(); i++)
+			{
+				fwbw[0][j][i] = 1;
+			}
+
+			emit(fwbw[0][j], j);
+		}	
+
+		// BW
+		for (int j = 0; j < scoreVals.size(); j++)
+		{
+			for (int i = 0; i < scoreVals[j].size(); i++)
+			{
+				fwbw[1][j][i] = 1;
+			}
+		}
+	}
+
+	stateVec getProbs(int pos)
+	{
+		stateVec toret;
+		double sum = 0;
+		for (int i = 0; i < scoreVals[pos].size(); i++)
+		{
+			toret[i] = fwbw[0][pos][i] * fwbw[1][pos][i];
+			sum += toret[i];
+		}
+
+		sum = 1 / sum;
+		for (int i = 0; i < scoreVals[pos].size(); i++)
+		{
+			toret[i] *= sum;
+		}
+
+		return toret;
 	}
 } hmm;
 
-using stateVec = array<double, 1000>;
+void writeWithSeparator(const string& separator)
+{
+	for (int i = 0; i < hmm.scoreVals.size(); i++)
+	{
+		stateVec states = hmm.getProbs(i);
+		int maxindex = 0;
+		for (int i = 0; i < hmm.scoreVals[i].size(); i++)
+		{
+			if (states[i] > states[maxindex]) maxindex = i;
+		}
+		cout << maxindex << ":" << states[maxindex];
+		/*for (int j = 0; j < 4; j++)
+		{
+		cout << ":" << hmm.ourBoxes[i][maxindex][j];
+		}*/
+		cout << " ";
+		if (hmm.lineEnd[i]) cout << separator << "\n";
+	}
+}
 
 int main(int argc, char** argv)
 {
@@ -263,5 +327,9 @@ int main(int argc, char** argv)
 	});
 
 	hmm.prepareLineEnd(introws);
-	hmm.computeFB();
+	hmm.computeFB();	
+	writeWithSeparator("##");
+	
+	hmm.fakeFB();
+	writeWithSeparator("//");
 }
