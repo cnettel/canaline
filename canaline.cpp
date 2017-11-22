@@ -1,9 +1,12 @@
 #include <array>
+#include <boost/lexical_cast.hpp>
+#include <Magick++.h>
 #include <boost/fusion/adapted/array.hpp>
 #include <boost/fusion/adapted/std_array.hpp>
 #include <boost/fusion/adapted/std_tuple.hpp>
 #include <boost/fusion/adapted/std_pair.hpp>
 #include <boost/spirit/home/x3.hpp>
+#include <boost/format.hpp>
 #include <boost/spirit/include/support_istream_iterator.hpp>
 
 #include <iostream>
@@ -276,8 +279,15 @@ struct hmmtype
 	}
 } hmm;
 
-void writeWithSeparator(const string& separator)
-{
+void writeWithSeparator(const string& separator, Magick::Image img, string path)
+{	
+	std::list<Magick::Drawable> drawList;
+	drawList.push_back(Magick::DrawableFillOpacity(0));
+	drawList.push_back(Magick::DrawableStrokeWidth(5));	
+	drawList.push_back(Magick::DrawableStrokeColor("black"));
+	array<string, 3> colors = { "red", "green", "blue" };
+	img.strokeWidth(0.5);
+	//drawList.push_back(Magick::DrawableStrokeOpacity(0.25));
 	for (int i = 0; i < hmm.scoreVals.size(); i++)
 	{
 		stateVec states = hmm.getProbs(i);
@@ -291,14 +301,24 @@ void writeWithSeparator(const string& separator)
 		{
 		cout << ":" << hmm.ourBoxes[i][maxindex][j];
 		}*/
+		//img.fillColor(Magick::Color::Color(0, 0, 0, 65535 - states[maxindex] * 65535));
+		const box& b = hmm.ourBoxes[i][maxindex];
+		drawList.push_back(Magick::DrawableRectangle(b[0], b[1], b[2], b[3]));		
+		img.draw(drawList);
+		drawList.pop_back();
+		
+		img.strokeColor(colors[i % 3]);
+		img.draw(Magick::DrawableText(b[0] + 20, b[1] + 20, boost::lexical_cast<string>(i) + ":" + boost::str(boost::format("%.2f") % states[maxindex])));
 		cout << " ";
 		if (hmm.lineEnd[i]) cout << separator << "\n";
 	}
+	img.write(path);
 }
 
 int main(int argc, char** argv)
 {
-	if (argc < 2)
+	Magick::InitializeMagick(0);
+	if (argc < 3)
 	{
 		return -1;
 	}
@@ -306,6 +326,28 @@ int main(int argc, char** argv)
 	
 	parseToEndWithError(file, boxes > scores, as_const(std::forward_as_tuple(hmm.ourBoxes, hmm.scoreVals)));
 	cout << "Read " << hmm.ourBoxes.size() << " box lists and " << hmm.scoreVals.size() << " score lists." << "\n";
+
+	// Do soft-max
+	for (auto& scoreList : hmm.scoreVals)
+	{
+		double maxVal = 0;
+		for (double& score : scoreList)
+		{
+			score *= 10;
+			maxVal = max(score, maxVal);
+		}
+
+		double sum = 0;
+		for (double score : scoreList)
+		{
+			sum += exp(score - maxVal);
+		}
+
+		for (double& score : scoreList)
+		{
+			score = exp(score - maxVal) / sum;
+		}
+	}
 
 	file = ifstream(argv[2]);
 	vector<vector<int>> introws;
@@ -327,9 +369,12 @@ int main(int argc, char** argv)
 	});
 
 	hmm.prepareLineEnd(introws);
+
+	Magick::Image origImg(argv[3]);
+
 	hmm.computeFB();	
-	writeWithSeparator("##");
+	writeWithSeparator("##", origImg, string(argv[3]) + ".fb.png");
 	
 	hmm.fakeFB();
-	writeWithSeparator("//");
+	writeWithSeparator("//", origImg, string(argv[3]) + ".naive.png");
 }
