@@ -417,7 +417,7 @@ int main(int argc, char** argv)
 	ifstream file(argv[1]);
 	
 	parseToEndWithError(file, boxes > scores, as_const(std::forward_as_tuple(hmm.ourBoxes, hmm.scoreVals)));
-	cout << "Read " << hmm.ourBoxes.size() << " box lists and " << hmm.scoreVals.size() << " score lists." << "\n";
+	cerr << "Read " << hmm.ourBoxes.size() << " box lists and " << hmm.scoreVals.size() << " score lists." << "\n";
 
 	// Do soft-max with amplification 1
 	hmm.softmax(1);	
