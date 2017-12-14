@@ -1,6 +1,8 @@
 #include <array>
 #include <boost/lexical_cast.hpp>
+#ifdef DOMAGICK
 #include <Magick++.h>
+#endif
 #include <boost/fusion/adapted/array.hpp>
 #include <boost/fusion/adapted/std_array.hpp>
 #include <boost/fusion/adapted/std_tuple.hpp>
@@ -94,6 +96,11 @@ public:
 	string getWord(int mapping)
 	{
 		return inversemapping[mapping];
+	}
+
+	int size()
+	{
+		return mapping.size();
 	}
 } wordmap;
 
@@ -190,7 +197,7 @@ struct hmmtype
 		}
 		if (isnan(sum)) cerr << "Normalization error at " << pos << "\n";
 		if (sum == 0) cerr << "Zero at " << pos << "\n";
-		cout << "Sum at " << pos << ":" << sum << "\n";
+		//cout << "Sum at " << pos << ":" << sum << "\n";
 
 		if (sum < 1e-10)
 		{
@@ -259,7 +266,7 @@ struct hmmtype
 		}
 	}
 
-	stateVec getProbs(int pos)
+	stateVec getProbs(int pos) const
 	{
 		stateVec toret;
 		double sum = 0;
@@ -277,24 +284,53 @@ struct hmmtype
 
 		return toret;
 	}
+
+	void softmax(double factor)
+	{
+		for (auto& scoreList : scoreVals)
+		{
+			double maxVal = 0;
+			for (double& score : scoreList)
+			{
+				score *= factor;
+				maxVal = max(score, maxVal);
+			}
+
+			double sum = 0;
+			for (double score : scoreList)
+			{
+				sum += exp(score - maxVal);
+			}
+
+			for (double& score : scoreList)
+			{
+				score = exp(score - maxVal) / sum;
+			}
+		}
+	}
 } hmm;
 
-void writeWithSeparator(const string& separator, Magick::Image img, string path)
+#ifdef DOMAGICK
+template<bool doimg> void writeWithSeparator(const string& separator, Magick::Image img, string path)
 {	
-	std::list<Magick::Drawable> drawList;
-	drawList.push_back(Magick::DrawableFillOpacity(0));
-	drawList.push_back(Magick::DrawableStrokeWidth(5));	
-	drawList.push_back(Magick::DrawableStrokeColor("black"));
-	array<string, 3> colors = { "red", "green", "blue" };
-	img.strokeWidth(0.5);
-	//drawList.push_back(Magick::DrawableStrokeOpacity(0.25));
+	if constexpr (doimg)
+	{
+		std::list<Magick::Drawable> drawList;
+		drawList.push_back(Magick::DrawableFillOpacity(0));
+		drawList.push_back(Magick::DrawableStrokeWidth(5));
+		drawList.push_back(Magick::DrawableStrokeColor("black"));
+		array<string, 3> colors = { "red", "green", "blue" };
+		img.strokeWidth(0.5);
+		//drawList.push_back(Magick::DrawableStrokeOpacity(0.25));
+	}	
+	
 	for (int i = 0; i < hmm.scoreVals.size(); i++)
 	{
 		stateVec states = hmm.getProbs(i);
 		int maxindex = 0;
-		for (int i = 0; i < hmm.scoreVals[i].size(); i++)
+		for (int j = 0; j < hmm.scoreVals[j].size(); j++)
 		{
-			if (states[i] > states[maxindex]) maxindex = i;
+			if (states[j] > states[maxindex]) maxindex = j;
 		}
 		cout << maxindex << ":" << states[maxindex];
 		/*for (int j = 0; j < 4; j++)
@@ -303,21 +339,77 @@ void writeWithSeparator(const string& separator, Magick::Image img, string path)
 		}*/
 		//img.fillColor(Magick::Color::Color(0, 0, 0, 65535 - states[maxindex] * 65535));
 		const box& b = hmm.ourBoxes[i][maxindex];
-		drawList.push_back(Magick::DrawableRectangle(b[0], b[1], b[2], b[3]));		
-		img.draw(drawList);
-		drawList.pop_back();
-		
-		img.strokeColor(colors[i % 3]);
-		img.draw(Magick::DrawableText(b[0] + 20, b[1] + 20, boost::lexical_cast<string>(i) + ":" + boost::str(boost::format("%.2f") % states[maxindex])));
+
+		if constexpr (doimg)
+		{
+			drawList.push_back(Magick::DrawableRectangle(b[0], b[1], b[2], b[3]));
+			img.draw(drawList);
+			drawList.pop_back();
+
+			img.strokeColor(colors[i % 3]);
+			img.draw(Magick::DrawableText(b[0] + 20, b[1] + 20, boost::lexical_cast<string>(i) + ":" + boost::str(boost::format("%.2f") % states[maxindex])));
+		}
 		cout << " ";
 		if (hmm.lineEnd[i]) cout << separator << "\n";
 	}
 	img.write(path);
 }
+#endif
+
+void writeDiffs(const vector<int>& words)
+{
+	vector<stateVec> wordScoresNew;
+	vector<stateVec> wordScoresOld;
+	wordScoresNew.resize(wordmap.size());
+	wordScoresOld.resize(wordmap.size());
+	int lens[wordmap.size()] = { 0 };
+	
+	for (int i = 0; i < hmm.scoreVals.size(); i++)
+	{
+		if (!lens[words[i]])
+		{
+			lens[words[i]] = hmm.scoreVals[i].size();
+			for (int j = 0; j < hmm.scoreVals[j].size(); j++)
+			{
+				wordScoresNew[words[i]][j] = 0;
+				wordScoresOld[words[i]][j] = 0;
+			}
+		}
+		
+		stateVec states = hmm.getProbs(i);		
+		for (int j = 0; j < hmm.scoreVals[i].size(); j++)
+		{
+			wordScoresNew[words[i]][j] += states[j];
+			wordScoresOld[words[i]][j] += hmm.scoreVals[i][j];
+		}
+	}
+
+	cout << "{";
+	bool first = true;
+	for (int i = 0; i < wordScoresNew.size(); i++)
+	{
+		if (!lens[i]) continue;
+		if (!first)
+		{
+			cout << ",\n";
+		}
+		
+		first = false;
+		cout << "\"" << wordmap.getWord(i) << "\" : ";
+		cout << "[";
+		for (int j = 0; j < lens[i]; j++)
+		{
+			cout << log(wordScoresNew[i][j] / wordScoresOld[i][j]) << (j != lens[i] - 1 ? ", " : "]");
+		}
+	}
+	cout << "}";
+}
 
 int main(int argc, char** argv)
 {
+#ifdef DOMAGICK
 	Magick::InitializeMagick(0);
+#endif
 	if (argc < 3)
 	{
 		return -1;
@@ -327,30 +419,12 @@ int main(int argc, char** argv)
 	parseToEndWithError(file, boxes > scores, as_const(std::forward_as_tuple(hmm.ourBoxes, hmm.scoreVals)));
 	cout << "Read " << hmm.ourBoxes.size() << " box lists and " << hmm.scoreVals.size() << " score lists." << "\n";
 
-	// Do soft-max
-	for (auto& scoreList : hmm.scoreVals)
-	{
-		double maxVal = 0;
-		for (double& score : scoreList)
-		{
-			score *= 10;
-			maxVal = max(score, maxVal);
-		}
-
-		double sum = 0;
-		for (double score : scoreList)
-		{
-			sum += exp(score - maxVal);
-		}
-
-		for (double& score : scoreList)
-		{
-			score = exp(score - maxVal) / sum;
-		}
-	}
+	// Do soft-max with amplification 1
+	hmm.softmax(1);	
 
 	file = ifstream(argv[2]);
 	vector<vector<int>> introws;
+	vector<int> words;
 	vector<vector<string>> rows;
 	file >> noskipws;
 	parseToEndWithError(file, linefile, rows);
@@ -367,14 +441,26 @@ int main(int argc, char** argv)
 
 		return introw;
 	});
+	for (auto row : introws)
+	{
+		for (int w : row)
+		{
+			words.push_back(w);
+		}
+	}
 
 	hmm.prepareLineEnd(introws);
 
+#ifdef DOMAGICK
 	Magick::Image origImg(argv[3]);
+#endif
 
 	hmm.computeFB();	
-	writeWithSeparator("##", origImg, string(argv[3]) + ".fb.png");
+	//writeWithSeparator("##", origImg, string(argv[3]) + ".fb.png");
 	
-	hmm.fakeFB();
-	writeWithSeparator("//", origImg, string(argv[3]) + ".naive.png");
+	// Sanity check, basically compute probs WITHOUT the HMM
+	//hmm.fakeFB();
+	//writeWithSeparator("//", origImg, string(argv[3]) + ".naive.png");
+
+	writeDiffs(words);
 }
