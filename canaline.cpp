@@ -49,7 +49,7 @@ template<class T> auto constexpr bracketize(T what)
 auto boxrule = bracketize(x3::int_ > ',' > x3::int_ > ',' > x3::int_ > ',' > x3::int_);
 // Comma-separated list of such vectors
 auto innerboxlist = (boxrule % ',');
-auto fullboxlist = x3::lit("array") > '(' > bracketize(innerboxlist ) > ',' > "dtype" > '=' > "int64" > ')';
+auto fullboxlist = x3::lit("array") > '(' > bracketize(innerboxlist ) > ',' > "dtype" > '=' > (x3::lit("int32") | x3::lit("int64")) > ')';
 // The whole first section of the data file
 auto boxes = bracketize(*(fullboxlist));
 
@@ -106,7 +106,7 @@ public:
 
 // Coming in C++ 17
 template <class T>
-constexpr std::add_const_t<T>& as_const(const T& t) noexcept
+constexpr std::add_const_t<T>& as_const_cheat(const T& t) noexcept
 {
 	return t;
 }
@@ -310,9 +310,13 @@ struct hmmtype
 	}
 } hmm;
 
+template<bool doimg> void writeWithSeparator(const string& separator
 #ifdef DOMAGICK
-template<bool doimg> void writeWithSeparator(const string& separator, Magick::Image img, string path)
-{	
+	, Magick::Image img, string path
+#endif
+)
+{
+#ifdef DOMAGICK
 	if constexpr (doimg)
 	{
 		std::list<Magick::Drawable> drawList;
@@ -322,8 +326,9 @@ template<bool doimg> void writeWithSeparator(const string& separator, Magick::Im
 		array<string, 3> colors = { "red", "green", "blue" };
 		img.strokeWidth(0.5);
 		//drawList.push_back(Magick::DrawableStrokeOpacity(0.25));
-	}	
-	
+	}
+#endif
+
 	for (int i = 0; i < hmm.scoreVals.size(); i++)
 	{
 		stateVec states = hmm.getProbs(i);
@@ -340,6 +345,7 @@ template<bool doimg> void writeWithSeparator(const string& separator, Magick::Im
 		//img.fillColor(Magick::Color::Color(0, 0, 0, 65535 - states[maxindex] * 65535));
 		const box& b = hmm.ourBoxes[i][maxindex];
 
+#ifdef DOMAGICK
 		if constexpr (doimg)
 		{
 			drawList.push_back(Magick::DrawableRectangle(b[0], b[1], b[2], b[3]));
@@ -349,12 +355,17 @@ template<bool doimg> void writeWithSeparator(const string& separator, Magick::Im
 			img.strokeColor(colors[i % 3]);
 			img.draw(Magick::DrawableText(b[0] + 20, b[1] + 20, boost::lexical_cast<string>(i) + ":" + boost::str(boost::format("%.2f") % states[maxindex])));
 		}
+#endif
 		cout << " ";
 		if (hmm.lineEnd[i]) cout << separator << "\n";
 	}
-	img.write(path);
-}
+#ifdef DOMAGICK
+	if constexpr (doimg)
+	{
+		img.write(path);
+	}
 #endif
+}
 
 void writeDiffs(const vector<int>& words)
 {
@@ -416,7 +427,7 @@ int main(int argc, char** argv)
 	}
 	ifstream file(argv[1]);
 	
-	parseToEndWithError(file, boxes > scores, as_const(std::forward_as_tuple(hmm.ourBoxes, hmm.scoreVals)));
+	parseToEndWithError(file, boxes > scores, as_const_cheat(std::forward_as_tuple(hmm.ourBoxes, hmm.scoreVals)));
 	cerr << "Read " << hmm.ourBoxes.size() << " box lists and " << hmm.scoreVals.size() << " score lists." << "\n";
 
 	// Do soft-max with amplification 1
@@ -456,7 +467,7 @@ int main(int argc, char** argv)
 #endif
 
 	hmm.computeFB();	
-	//writeWithSeparator("##", origImg, string(argv[3]) + ".fb.png");
+	writeWithSeparator<false>("##");
 	
 	// Sanity check, basically compute probs WITHOUT the HMM
 	//hmm.fakeFB();
