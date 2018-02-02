@@ -147,7 +147,7 @@ struct hmmtype
 	static double transProb(const box& a, const box& b, bool linebreak)
 	{
 		bool ok = false;
-		int height = max(a[3] - a[3], b[3] - b[1]);
+		int height = max(a[3] - a[1], b[3] - b[1]);
 		if (linebreak)
 		{
 			if (b[1] > a[1]) ok = true;
