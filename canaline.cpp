@@ -113,7 +113,9 @@ constexpr std::add_const_t<T>& as_const_cheat(const T& t) noexcept
 
 auto word_ = x3::lexeme[+(x3::char_ - x3::space)];
 auto linefile = *word_ % x3::eol;
-using stateVec = array<double, 1000>;
+constexpr int statelimit = 4000;
+
+using stateVec = array<double, statelimit>;
 
 struct hmmtype
 {
@@ -121,7 +123,7 @@ struct hmmtype
 	vector<vector<double>> scoreVals;
 	vector<bool> lineEnd;
 
-	stateVec fwbw[2][1000] = { 0 };
+	stateVec fwbw[2][statelimit] = { 0 };
 
 	void prepareLineEnd(const vector<vector<int>>& introws)
 	{
@@ -140,7 +142,7 @@ struct hmmtype
 	{
 		for (int i = 0; i < scoreVals[pos].size(); i++)
 		{
-			state[i] *= max(1e-9, scoreVals[pos][i]);
+			state[i] *= max(1e-15, scoreVals[pos][i]);
 		}
 	}
 
@@ -150,14 +152,14 @@ struct hmmtype
 		int height = max(a[3] - a[1], b[3] - b[1]);
 		if (linebreak)
 		{
-			if (b[1] > a[1]) ok = true;
+			if (b[3] > a[1]) ok = true;
 		}
 		else
 		{
 			if (b[0] > a[0] && b[1] > a[1] - height && b[1] < a[1] + height) ok = true;
 		}
 
-		return ok ? 1 : 1e-5;
+		return ok ? 1 : 1e-1;
 	}
 
 	template<int dir> void transition(const stateVec& fState, stateVec& tState, int fromPos, int toPos)
@@ -429,6 +431,16 @@ int main(int argc, char** argv)
 	
 	parseToEndWithError(file, boxes > scores, as_const_cheat(std::forward_as_tuple(hmm.ourBoxes, hmm.scoreVals)));
 	cerr << "Read " << hmm.ourBoxes.size() << " box lists and " << hmm.scoreVals.size() << " score lists." << "\n";
+
+	for (int i = 0; i < hmm.ourBoxes.size(); i++)
+	{
+		if (hmm.ourBoxes[i].size() > statelimit)
+		{
+			hmm.ourBoxes[i].resize(statelimit);
+			hmm.scoreVals[i].resize(statelimit);
+			fprintf(stderr, "Capping state count at word %d to limit %d.\n", i, statelimit);
+		}
+	}
 
 	// Do soft-max with amplification 1
 	hmm.softmax(1);	
