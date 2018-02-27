@@ -335,7 +335,7 @@ template<bool doimg> void writeWithSeparator(const string& separator
 	{
 		stateVec states = hmm.getProbs(i);
 		int maxindex = 0;
-		for (int j = 0; j < hmm.scoreVals[j].size(); j++)
+		for (int j = 0; j < hmm.scoreVals[i].size(); j++)
 		{
 			if (states[j] > states[maxindex]) maxindex = j;
 		}
