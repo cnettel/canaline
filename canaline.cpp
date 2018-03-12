@@ -382,7 +382,7 @@ void writeDiffs(const vector<int>& words)
 		if (!lens[words[i]])
 		{
 			lens[words[i]] = hmm.scoreVals[i].size();
-			for (int j = 0; j < hmm.scoreVals[j].size(); j++)
+			for (int j = 0; j < hmm.scoreVals[i].size(); j++)
 			{
 				wordScoresNew[words[i]][j] = 0;
 				wordScoresOld[words[i]][j] = 0;
