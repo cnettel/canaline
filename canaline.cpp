@@ -1,3 +1,6 @@
+#define NDEBUG
+#define _ITERATOR_DEBUG_LEVEL 0
+
 #include <array>
 #include <boost/lexical_cast.hpp>
 #ifdef DOMAGICK
@@ -21,6 +24,20 @@ using namespace boost::spirit;
 using namespace std;
 
 using box = std::array<int, 4>;
+
+box intersect(const box& a, const box& b)
+{
+	box res = { max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3]) };
+	res[0] = min(res[0], res[2]);
+	res[1] = min(res[1], res[3]);
+
+	return res;
+}
+
+int area(const box& a)
+{
+	return (a[2] - a[0]) * (a[3] - a[1]);
+}
 
 // According to https://wandbox.org/permlink/poeusnilIOwmiEBo
 namespace boost {
@@ -159,7 +176,7 @@ struct hmmtype
 			if (b[0] > a[0] && b[1] > a[1] - height && b[1] < a[1] + height) ok = true;
 		}
 
-		return ok ? 1 : 1e-1;
+		return (ok ? 1 : 1e-1) * (1 - area(intersect(a, b)) / max(min(area(a), area(b)) * 1., 1e-9));
 	}
 
 	template<int dir> void transition(const stateVec& fState, stateVec& tState, int fromPos, int toPos)
@@ -375,7 +392,10 @@ void writeDiffs(const vector<int>& words)
 	vector<stateVec> wordScoresOld;
 	wordScoresNew.resize(wordmap.size());
 	wordScoresOld.resize(wordmap.size());
-	int lens[wordmap.size()] = { 0 };
+	vector<int> lens;
+	lens.resize(wordmap.size());
+	fill(lens.begin(), lens.end(), 0);
+
 	
 	for (int i = 0; i < hmm.scoreVals.size(); i++)
 	{
@@ -470,6 +490,13 @@ int main(int argc, char** argv)
 		{
 			words.push_back(w);
 		}
+	}
+
+	if (words.size() != hmm.ourBoxes.size())
+	{
+		cerr << "Number of words in transcription is " << words.size() << ", but number of box lists is " << hmm.ourBoxes.size() << ". This does not make sense. Terminating.";
+
+		return -1;
 	}
 
 	hmm.prepareLineEnd(introws);
