@@ -176,7 +176,7 @@ struct hmmtype
 			if (b[0] > a[0] && b[1] > a[1] - height && b[1] < a[1] + height) ok = true;
 		}
 
-		return (ok ? 1 : 1e-1) * (1 - area(intersect(a, b)) / max(min(area(a), area(b)) * 1., 1e-9));
+		return (ok ? 1 : 1e-1) * (1 - 0.9 * area(intersect(a, b)) / max(min(area(a), area(b)) * 1., 1e-9));
 	}
 
 	template<int dir> void transition(const stateVec& fState, stateVec& tState, int fromPos, int toPos)
