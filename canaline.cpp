@@ -34,6 +34,13 @@ box intersect(const box& a, const box& b)
 	return res;
 }
 
+box boxunion(const box& a, const box& b)
+{
+	box res = { min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]) };	
+
+	return res;
+}
+
 int area(const box& a)
 {
 	return (a[2] - a[0]) * (a[3] - a[1]);
@@ -159,7 +166,7 @@ struct hmmtype
 	{
 		for (int i = 0; i < scoreVals[pos].size(); i++)
 		{
-			state[i] *= max(1e-15, scoreVals[pos][i]);
+			state[i] *= max(1e-50, scoreVals[pos][i]);
 		}
 	}
 
@@ -176,7 +183,7 @@ struct hmmtype
 			if (b[0] > a[0] && b[1] > a[1] - height && b[1] < a[1] + height) ok = true;
 		}
 
-		return (ok ? 1 : 1e-1) * (1 - 0.9 * area(intersect(a, b)) / max(min(area(a), area(b)) * 1., 1e-9));
+		return (ok ? 1 : 1e-2) * (1 - 0.99 * area(intersect(a, b)) / max(min(area(a), area(b)) * 1., 1e-9)) * (linebreak ? 1. : 0.01 + 0.99 * (area(a) + area(b) - area(intersect(a,b))) / max(area(boxunion(a, b)), 1));
 	}
 
 	template<int dir> void transition(const stateVec& fState, stateVec& tState, int fromPos, int toPos)
@@ -222,7 +229,7 @@ struct hmmtype
 		{
 			for (int i = 0; i < scoreVals[pos].size(); i++)
 			{
-				state[i] *= 1e40;
+				state[i] *= 1e150;
 			}
 		}
 	}
@@ -318,12 +325,14 @@ struct hmmtype
 			double sum = 0;
 			for (double score : scoreList)
 			{
-				sum += exp(score - maxVal);
+				sum += exp(score * score);
+				//sum += exp(score - maxVal);
 			}
 
 			for (double& score : scoreList)
 			{
-				score = exp(score - maxVal) / sum;
+				score = exp(score * score) / sum;
+				//score = exp(score - maxVal) / sum;
 			}
 		}
 	}
@@ -336,13 +345,14 @@ template<bool doimg> void writeWithSeparator(const string& separator
 )
 {
 #ifdef DOMAGICK
+	std::list<Magick::Drawable> drawList;
+	drawList.push_back(Magick::DrawableFillOpacity(0));
+	drawList.push_back(Magick::DrawableStrokeWidth(5));
+	drawList.push_back(Magick::DrawableStrokeColor("white"));
+	array<string, 3> colors = { "red", "green", "blue" };
+
 	if constexpr (doimg)
-	{
-		std::list<Magick::Drawable> drawList;
-		drawList.push_back(Magick::DrawableFillOpacity(0));
-		drawList.push_back(Magick::DrawableStrokeWidth(5));
-		drawList.push_back(Magick::DrawableStrokeColor("black"));
-		array<string, 3> colors = { "red", "green", "blue" };
+	{		
 		img.strokeWidth(0.5);
 		//drawList.push_back(Magick::DrawableStrokeOpacity(0.25));
 	}
@@ -432,7 +442,7 @@ void writeDiffs(const vector<int>& words)
 		cout << "[";
 		for (int j = 0; j < lens[i]; j++)
 		{
-			cout << log(wordScoresNew[i][j] / wordScoresOld[i][j]) << (j != lens[i] - 1 ? ", " : "]");
+			cout << wordScoresNew[i][j] << ":" << wordScoresOld[i][j] << ":" << log(sqrt(wordScoresNew[i][j] / wordScoresOld[i][j])) << (j != lens[i] - 1 ? ", " : "]");
 		}
 	}
 	cout << "}";
@@ -463,7 +473,7 @@ int main(int argc, char** argv)
 	}
 
 	// Do soft-max with amplification 1
-	hmm.softmax(1);	
+	hmm.softmax(0.5 * sqrt(108));	
 
 	file = ifstream(argv[2]);
 	vector<vector<int>> introws;
@@ -506,7 +516,7 @@ int main(int argc, char** argv)
 #endif
 
 	hmm.computeFB();	
-	writeWithSeparator<false>("##");
+	writeWithSeparator<false>("//");// , origImg, string(argv[3]) + ".N.png");
 	
 	// Sanity check, basically compute probs WITHOUT the HMM
 	//hmm.fakeFB();
