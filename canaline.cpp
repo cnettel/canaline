@@ -442,7 +442,9 @@ void writeDiffs(const vector<int>& words)
 		cout << "[";
 		for (int j = 0; j < lens[i]; j++)
 		{
-			cout << wordScoresNew[i][j] << ":" << wordScoresOld[i][j] << ":" << log(sqrt(wordScoresNew[i][j] / wordScoresOld[i][j])) << (j != lens[i] - 1 ? ", " : "]");
+			// Richer debug:
+			//cout << wordScoresNew[i][j] << ":" << wordScoresOld[i][j] << ":" << log(sqrt(wordScoresNew[i][j] / wordScoresOld[i][j])) << (j != lens[i] - 1 ? ", " : "]");
+			cout << log(sqrt(wordScoresNew[i][j] / wordScoresOld[i][j])) << (j != lens[i] - 1 ? ", " : "]");
 		}
 	}
 	cout << "}";
